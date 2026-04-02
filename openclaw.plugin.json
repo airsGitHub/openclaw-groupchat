@@ -1,0 +1,62 @@
+{
+  "id": "openclaw-groupchat",
+  "name": "Group Chat",
+  "description": "Group chat bus for OpenClaw agents — parallel broadcast, persistent transcript, SSE events",
+  "version": "1.0.0",
+  "defaultConfig": {
+    "server": {
+      "host": "0.0.0.0",
+      "port": 18900
+    },
+    "storage": {
+      "dataDir": "~/.openclaw/groupchat"
+    },
+    "broadcast": {
+      "timeoutMs": 120000,
+      "maxHistoryContext": 20
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "server": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "host": { "type": "string", "default": "0.0.0.0" },
+          "port": { "type": "number", "default": 18900 }
+        }
+      },
+      "storage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dataDir": {
+            "type": "string",
+            "default": "~/.openclaw/groupchat",
+            "description": "Directory for room metadata and transcripts"
+          }
+        }
+      },
+      "broadcast": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "timeoutMs": {
+            "type": "number",
+            "default": 120000,
+            "minimum": 5000,
+            "description": "Max wait time per agent dispatch (ms)"
+          },
+          "maxHistoryContext": {
+            "type": "number",
+            "default": 20,
+            "minimum": 0,
+            "description": "Number of recent messages included as context for each agent"
+          }
+        }
+      }
+    }
+  }
+}

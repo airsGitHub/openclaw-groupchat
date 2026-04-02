@@ -1,0 +1,24 @@
+{
+  "name": "openclaw-groupchat",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Group chat bus plugin for OpenClaw — parallel broadcast between agents",
+  "main": "index.ts",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "@types/uuid": "^10.0.0",
+    "openclaw": "^2026.3.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  }
+}
