@@ -529,7 +529,7 @@ async function broadcastMessage(
 
   const responses = await Promise.all(
     responders.map(async (agentId) => {
-      const sessionKey = `groupchat:${roomId}:${agentId}`;
+      const sessionKey = `agent:${agentId}:groupchat:${roomId}`;
       try {
         const responseText = await dispatchToAgent(
           api,

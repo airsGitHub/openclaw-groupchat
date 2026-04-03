@@ -208,9 +208,10 @@ class GatewayRpcConnection {
       .sign(null, Buffer.from(payloadParts.join("|")), identity.privateKey)
       .toString("base64url");
 
+    const connectId = uuidv4();
     const connectFrame = {
       type: "req",
-      id: uuidv4(),
+      id: connectId,
       method: "connect",
       params: {
         minProtocol: 3,
@@ -239,7 +240,23 @@ class GatewayRpcConnection {
         },
       },
     };
-    ws.send(JSON.stringify(connectFrame));
+
+    // Wait for the server to ack the connect before sending any other frames.
+    // Without this, the next request() call races the connect handshake and the
+    // server rejects it with "first request must be connect".
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error("connect ack timeout")),
+        10_000,
+      );
+      this.pending.set(connectId, {
+        expectFinal: false,
+        resolve: () => { clearTimeout(timer); resolve(); },
+        reject: (e) => { clearTimeout(timer); reject(e); },
+        timer,
+      });
+      ws.send(JSON.stringify(connectFrame));
+    });
   }
 
   async request(
