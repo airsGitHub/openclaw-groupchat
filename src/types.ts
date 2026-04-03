@@ -12,8 +12,9 @@ export interface Room {
 export interface TranscriptEntry {
   ts: string;
   roomId: string;
-  from: string;  // agentId or "user"
+  from: string;      // agentId or "user"
   text: string;
+  mentions?: string[]; // agentIds explicitly @mentioned (only they reply)
 }
 
 export interface BroadcastResult {

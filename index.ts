@@ -459,6 +459,29 @@ const plugin = {
 export default plugin;
 
 // ---------------------------------------------------------------------------
+// @mention parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract @mentioned agentIds from message text.
+ * e.g. "@tanaka 你觉得呢？" → ["tanaka"]
+ *      "@tanaka @designer 都说一下" → ["tanaka", "designer"]
+ */
+function parseMentions(text: string, members: string[]): string[] {
+  const memberSet = new Set(members);
+  const mentioned: string[] = [];
+  const re = /@([\w\-\.]+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const name = match[1];
+    if (memberSet.has(name) && !mentioned.includes(name)) {
+      mentioned.push(name);
+    }
+  }
+  return mentioned;
+}
+
+// ---------------------------------------------------------------------------
 // Core broadcast logic (shared by REST endpoint and agent tool)
 // ---------------------------------------------------------------------------
 
@@ -474,29 +497,38 @@ async function broadcastMessage(
   const room = store.getRoom(roomId);
   if (!room) throw new Error(`room not found: ${roomId}`);
 
-  // 1. Append sender's message to transcript
+  // 1. Parse @mentions — only mentioned members reply; all still see the message
+  const mentions = parseMentions(text, room.members);
+
+  // 2. Append sender's message to transcript (visible to everyone)
   const senderEntry: TranscriptEntry = {
     ts: new Date().toISOString(),
     roomId,
     from,
     text,
+    ...(mentions.length > 0 ? { mentions } : {}),
   };
   store.appendTranscript(senderEntry);
   sse.emit(roomId, { event: "message", data: senderEntry });
 
-  // 2. Build context: recent history BEFORE this message
+  // 3. Build context: recent history BEFORE this message
   const history = store
     .getTranscript(roomId, config.broadcast.maxHistoryContext + 1)
     .slice(0, -1); // exclude the message we just appended
 
-  // 3. Build message text for agents
-  const agentMsg = buildAgentMessage(room.name, history, from, text);
+  // 4. Determine who responds:
+  //    - @mentions present → only mentioned members (excluding sender)
+  //    - no @mentions → all members except sender (original broadcast)
+  const responders =
+    mentions.length > 0
+      ? mentions.filter((m) => m !== from)
+      : room.members.filter((m) => m !== from);
 
-  // 4. Dispatch to all members except sender, in parallel
-  const targets = room.members.filter((m) => m !== from);
+  // 5. Build message text for agents
+  const agentMsg = buildAgentMessage(room.name, history, from, text, mentions);
 
   const responses = await Promise.all(
-    targets.map(async (agentId) => {
+    responders.map(async (agentId) => {
       const sessionKey = `groupchat:${roomId}:${agentId}`;
       try {
         const responseText = await dispatchToAgent(
@@ -531,13 +563,13 @@ async function broadcastMessage(
     }),
   );
 
-  // 5. SSE: broadcast completed event
+  // 6. SSE: broadcast completed event
   sse.emit(roomId, {
     event: "broadcast_complete",
-    data: { from, responses },
+    data: { from, mentions, responses },
   });
 
-  return { roomId, from, text, responses };
+  return { roomId, from, text, mentions, responses };
 }
 
 function buildAgentMessage(
@@ -545,8 +577,13 @@ function buildAgentMessage(
   history: TranscriptEntry[],
   from: string,
   text: string,
+  mentions: string[] = [],
 ): string {
   const lines: string[] = [`[群聊: ${roomName}]`];
+
+  if (mentions.length > 0) {
+    lines.push(`[此消息点名了: ${mentions.join(", ")}，请回复]`);
+  }
 
   if (history.length > 0) {
     lines.push("--- 最近消息 ---");

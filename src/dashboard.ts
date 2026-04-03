@@ -124,6 +124,25 @@ export function getDashboardHtml(): string {
   .msg-group.is-user { align-items: flex-end; }
   .msg-group.is-user .msg-header { flex-direction: row-reverse; }
 
+  /* @mention styles */
+  .mention-tag {
+    display: inline-block; padding: 1px 7px; border-radius: 12px;
+    font-size: 12px; font-weight: 700; color: #fff;
+    margin-right: 3px; vertical-align: middle;
+  }
+  .mention-badge {
+    display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+    font-size: 11px; color: var(--text-muted); margin-bottom: 5px; padding: 0 4px;
+  }
+  .mention-badge .at-icon { font-size: 13px; }
+  .msg-bubble .at-highlight {
+    font-weight: 700; padding: 0 2px; border-radius: 3px;
+  }
+  .msg-group.has-mention .msg-bubble {
+    border-color: rgba(91,141,238,0.4);
+    background: rgba(91,141,238,0.06);
+  }
+
   .typing-indicator {
     display: flex; gap: 4px; align-items: center; padding: 10px 14px;
     background: var(--surface2); border: 1px solid var(--border);
@@ -411,18 +430,43 @@ function appendMessage(entry, doScroll = true) {
   if (typing) typing.remove();
 
   const isUser = entry.from === 'user';
+  const mentions = Array.isArray(entry.mentions) ? entry.mentions : [];
+  const hasMention = mentions.length > 0;
+
+  // Render @mention tags above bubble
+  const mentionBadge = hasMention
+    ? \`<div class="mention-badge">
+        <span class="at-icon">@</span>
+        \${mentions.map(m => \`<span class="mention-tag" style="background:\${agentColor(m)}">\${esc(m)}</span>\`).join('')}
+        <span>仅回复</span>
+      </div>\`
+    : '';
+
+  // Highlight @agentId tokens in text
+  const renderedText = highlightMentions(entry.text);
+
   const group = document.createElement('div');
-  group.className = \`msg-group\${isUser ? ' is-user' : ''}\`;
+  group.className = \`msg-group\${isUser ? ' is-user' : ''}\${hasMention ? ' has-mention' : ''}\`;
   group.innerHTML = \`
+    \${mentionBadge}
     <div class="msg-header">
       <span class="msg-author" style="color:\${isUser ? 'var(--user-color)' : agentColor(entry.from)}">\${esc(entry.from)}</span>
       <span class="msg-time">\${formatTime(entry.ts)}</span>
     </div>
-    <div class="msg-bubble">\${esc(entry.text)}</div>
+    <div class="msg-bubble">\${renderedText}</div>
   \`;
   container.appendChild(group);
 
   if (doScroll) scrollToBottom();
+}
+
+function highlightMentions(text) {
+  // Replace @word with a colored span; esc first to avoid XSS
+  const escaped = esc(text);
+  return escaped.replace(/@([\w\-\.]+)/g, (_, name) => {
+    const color = agentColor(name);
+    return \`<span class="at-highlight" style="color:\${color};background:\${color}22">@\${esc(name)}</span>\`;
+  });
 }
 
 function showTyping(agentId) {
@@ -483,12 +527,16 @@ async function sendMessage() {
   isBroadcasting = true;
   document.getElementById('send-btn').disabled = true;
 
-  // Show typing for all members
-  if (currentRoom) {
-    currentRoom.members.forEach(m => showTyping(m));
-  }
+  // Parse @mentions to decide who gets typing indicators
+  const members = currentRoom?.members ?? [];
+  const mentionedInText = members.filter(m => text.includes('@' + m));
+  const responders = mentionedInText.length > 0 ? mentionedInText : members;
+  responders.forEach(m => showTyping(m));
 
-  setBroadcastStatus('active', \`正在广播给 \${currentRoom?.members?.length || 0} 个成员…\`);
+  const statusMsg = mentionedInText.length > 0
+    ? \`@点名 → 正在等待 \${mentionedInText.join(', ')} 回复…\`
+    : \`正在广播给 \${members.length} 个成员…\`;
+  setBroadcastStatus('active', statusMsg);
 
   try {
     await api('POST', \`/groupchat/rooms/\${currentRoomId}/messages\`, { from: 'user', text });
