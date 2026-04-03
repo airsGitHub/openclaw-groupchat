@@ -462,8 +462,9 @@ function appendMessage(entry, doScroll = true) {
 
 function highlightMentions(text) {
   // Replace @word with a colored span; esc first to avoid XSS
+  // Note: double-escaped regex because this is inside a TS template literal
   const escaped = esc(text);
-  return escaped.replace(/@([\w\-\.]+)/g, (_, name) => {
+  return escaped.replace(/@([\\w\\-\\.]+)/g, (_, name) => {
     const color = agentColor(name);
     return \`<span class="at-highlight" style="color:\${color};background:\${color}22">@\${esc(name)}</span>\`;
   });
